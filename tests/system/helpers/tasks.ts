@@ -28,7 +28,11 @@ export async function waitForTaskTerminalState(taskId: string, options: WaitTask
       where: { id: taskId },
     })
     if (task && TERMINAL_STATUSES.has(task.status as TaskStatus)) {
-      return task
+      const events = await prisma.taskEvent.findMany({ where: { taskId } })
+      const hasTerminalEvent = events.some((e) => e.eventType === TASK_EVENT_TYPE.COMPLETED || e.eventType === TASK_EVENT_TYPE.FAILED)
+      if (hasTerminalEvent) {
+        return task
+      }
     }
     await sleep(intervalMs)
   }
