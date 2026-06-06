@@ -77,6 +77,11 @@ describe('worker voice-design behavior', () => {
       requestId: 'req-bl-1',
     })
     apiConfigMock.getProviderConfig.mockResolvedValue({ apiKey: 'test-key' })
+
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(0),
+    })))
   })
 
   it('missing required fields -> explicit error', async () => {

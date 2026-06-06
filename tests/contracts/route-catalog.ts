@@ -166,6 +166,10 @@ const ROUTE_FILES = [
   'src/app/api/user/costs/route.ts',
   'src/app/api/user/models/route.ts',
   'src/app/api/user/transactions/route.ts',
+  'src/app/api/workflows/generate/route.ts',
+  'src/app/api/workflows/optimize-prompt/route.ts',
+  'src/app/api/workflows/task/[taskId]/route.ts',
+  'src/app/api/workflows/trim-audio/route.ts',
 ] as const
 
 function resolveCategory(routeFile: string): RouteCategory {
