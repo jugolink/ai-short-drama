@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
 import { AppIcon } from '@/components/ui/icons'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
+import { BalanceDisplay } from '@/components/BalanceDisplay'
 
 export default function Navbar() {
   const { data: session, status } = useSession()
@@ -77,17 +78,19 @@ export default function Navbar() {
               <div className="h-8 w-8 rounded-full bg-[#f5f5f5] animate-pulse" />
             </div>
           ) : session ? (
-            <div className="relative" ref={menuRef}>
-              <button
-                onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                <div className="w-8 h-8 rounded-full bg-[#171717] text-white flex items-center justify-center text-sm font-semibold">
-                  {userInitial}
-                </div>
-                <span className="text-sm font-medium text-[#171717] hidden sm:inline">{userName}</span>
-                <AppIcon name="chevronDown" className={`w-3 h-3 text-[#737373] transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
+            <>
+              <BalanceDisplay />
+              <div className="relative" ref={menuRef}>
+                <button
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <div className="w-8 h-8 rounded-full bg-[#171717] text-white flex items-center justify-center text-sm font-semibold">
+                    {userInitial}
+                  </div>
+                  <span className="text-sm font-medium text-[#171717] hidden sm:inline">{userName}</span>
+                  <AppIcon name="chevronDown" className={`w-3 h-3 text-[#737373] transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
 
               {userMenuOpen && (
                 <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-[#e5e5e5] rounded-xl shadow-lg py-2 z-50">
@@ -117,6 +120,7 @@ export default function Navbar() {
                 </div>
               )}
             </div>
+            </>
           ) : (
             <div className="flex items-center gap-4">
               <Link

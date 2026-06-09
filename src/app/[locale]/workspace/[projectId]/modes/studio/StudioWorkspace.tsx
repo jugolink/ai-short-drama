@@ -9,6 +9,9 @@ import WorkspaceStageContent from './components/WorkspaceStageContent'
 import WorkspaceAssetLibraryModal from './components/WorkspaceAssetLibraryModal'
 import WorkspaceHeaderShell from './components/WorkspaceHeaderShell'
 import WorkspaceSidebar from './components/WorkspaceSidebar'
+import WorkspaceLeftPanel from './components/WorkspaceLeftPanel'
+import WorkspaceSettingsPanel from './components/WorkspaceSettingsPanel'
+import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import { WorkspaceStageRuntimeProvider } from './WorkspaceStageRuntimeContext'
 import { useStudioWorkspaceController } from './hooks/useStudioWorkspaceController'
 import type { StudioWorkspaceProps } from './types'
@@ -96,32 +99,83 @@ function StudioWorkspaceContent(props: StudioWorkspaceProps) {
 
   return (
     <>
-    <div className="flex h-full overflow-hidden">
-        {/* Left sidebar */}
-        <WorkspaceSidebar
-          episodes={episodes}
-          currentEpisodeId={episodeId ?? null}
-          onEpisodeSelect={onEpisodeSelect ?? (() => {})}
-          stages={sidebarStages}
-          currentStage={vm.stageNav.currentStage}
-          onStageChange={vm.stageNav.handleStageChange}
-          onOpenAssetLibrary={() => vm.ui.openAssetLibrary()}
-          onOpenSettings={() => vm.ui.setIsSettingsModalOpen(true)}
-          onRefresh={() => vm.ui.onRefresh({ mode: 'full' })}
-          projectName={project.name}
-        />
+    <div className="flex h-full overflow-hidden bg-[#fafafa]">
+      <PanelGroup orientation="horizontal">
+        {/* Left Panel: Navigation & Asset Library */}
+        <Panel defaultSize={20} minSize={15} maxSize={30} className="border-r border-[#e5e5e5] bg-white">
+          <WorkspaceLeftPanel
+            episodes={episodes}
+            currentEpisodeId={episodeId ?? null}
+            onEpisodeSelect={onEpisodeSelect ?? (() => {})}
+            onEpisodeCreate={onEpisodeCreate}
+            stages={sidebarStages}
+            currentStage={vm.stageNav.currentStage}
+            onStageChange={vm.stageNav.handleStageChange}
+            projectName={project.name}
+            projectId={projectId}
+            isAnalyzingAssets={vm.execution.isAssetAnalysisRunning}
+            focusCharacterId={vm.ui.assetLibraryFocusCharacterId}
+            focusCharacterRequestId={vm.ui.assetLibraryFocusRequestId}
+            triggerGlobalAnalyze={vm.ui.triggerGlobalAnalyzeOnOpen}
+            onGlobalAnalyzeComplete={() => vm.ui.setTriggerGlobalAnalyzeOnOpen(false)}
+          />
+        </Panel>
 
-        {/* Right content area */}
-        <main className="flex-1 overflow-y-auto p-6">
-          <WorkspaceStageRuntimeProvider value={vm.runtime.stageRuntime}>
-            <WorkspaceStageContent currentStage={vm.stageNav.currentStage} />
-          </WorkspaceStageRuntimeProvider>
-        </main>
+        <PanelResizeHandle className="w-1 bg-transparent hover:bg-blue-500 cursor-col-resize transition-colors duration-200" />
+
+        {/* Center Panel: Main Stage Content */}
+        <Panel defaultSize={vm.ui.isSettingsModalOpen ? 55 : 80} minSize={40} className="relative bg-[#f5f5f5]">
+          <main className="h-full overflow-y-auto p-6">
+            <WorkspaceStageRuntimeProvider value={vm.runtime.stageRuntime}>
+              <WorkspaceStageContent currentStage={vm.stageNav.currentStage} />
+            </WorkspaceStageRuntimeProvider>
+          </main>
+        </Panel>
+
+        {/* Right Panel: Settings / Properties */}
+        {vm.ui.isSettingsModalOpen && (
+          <>
+            <PanelResizeHandle className="w-1 bg-transparent hover:bg-blue-500 cursor-col-resize transition-colors duration-200 border-l border-[#e5e5e5]" />
+            <Panel defaultSize={25} minSize={20} maxSize={40} className="bg-white">
+              <div className="h-full flex flex-col">
+                <div className="p-4 border-b border-[#e5e5e5] flex justify-between items-center bg-white shrink-0">
+                  <h3 className="font-bold text-[#171717]">属性与模型配置</h3>
+                  <button 
+                    onClick={() => vm.ui.setIsSettingsModalOpen(false)}
+                    className="text-[#737373] hover:text-[#171717] p-1 rounded hover:bg-[#f5f5f5]"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                  <WorkspaceSettingsPanel
+                    availableModels={vm.ui.userModelsForSettings || undefined}
+                    modelsLoaded={vm.ui.userModelsLoaded}
+                    artStyle={vm.project.artStyle}
+                    analysisModel={vm.project.analysisModel}
+                    characterModel={vm.project.characterModel}
+                    locationModel={vm.project.locationModel}
+                    storyboardModel={vm.project.storyboardModel}
+                    editModel={vm.project.editModel}
+                    videoModel={vm.project.videoModel}
+                    audioModel={vm.project.audioModel}
+                    capabilityOverrides={vm.project.capabilityOverrides}
+                    videoRatio={vm.project.videoRatio}
+                    ttsRate={vm.project.ttsRate !== undefined && vm.project.ttsRate !== null ? String(vm.project.ttsRate) : undefined}
+                    onUpdateConfig={vm.actions.handleUpdateConfig}
+                    globalAssetText={vm.project.globalAssetText}
+                  />
+                </div>
+              </div>
+            </Panel>
+          </>
+        )}
+      </PanelGroup>
     </div>
 
     {/* Modals — outside flex layout */}
     <WorkspaceHeaderShell
-        isSettingsModalOpen={vm.ui.isSettingsModalOpen}
+        isSettingsModalOpen={false} // Managed by Right Panel now
         isWorldContextModalOpen={vm.ui.isWorldContextModalOpen}
         onCloseSettingsModal={() => vm.ui.setIsSettingsModalOpen(false)}
         onCloseWorldContextModal={() => vm.ui.setIsWorldContextModalOpen(false)}
@@ -140,21 +194,6 @@ function StudioWorkspaceContent(props: StudioWorkspaceProps) {
         ttsRate={vm.project.ttsRate !== undefined && vm.project.ttsRate !== null ? String(vm.project.ttsRate) : undefined}
         onUpdateConfig={vm.actions.handleUpdateConfig}
         globalAssetText={vm.project.globalAssetText}
-      />
-
-      <WorkspaceAssetLibraryModal
-        isOpen={vm.ui.isAssetLibraryOpen}
-        onClose={vm.ui.closeAssetLibrary}
-        assetsLoading={vm.ui.assetsLoading}
-        assetsLoadingState={vm.ui.assetsLoadingState}
-        hasCharacters={vm.project.projectCharacters.length > 0}
-        hasLocations={vm.project.projectLocations.length > 0}
-        projectId={projectId}
-        isAnalyzingAssets={vm.execution.isAssetAnalysisRunning}
-        focusCharacterId={vm.ui.assetLibraryFocusCharacterId}
-        focusCharacterRequestId={vm.ui.assetLibraryFocusRequestId}
-        triggerGlobalAnalyze={vm.ui.triggerGlobalAnalyzeOnOpen}
-        onGlobalAnalyzeComplete={() => vm.ui.setTriggerGlobalAnalyzeOnOpen(false)}
       />
 
       {vm.execution.showCreatingToast && (

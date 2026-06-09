@@ -20,6 +20,7 @@ import type {
 } from './openai-compat-media-template'
 import { validateOpenAICompatMediaTemplate } from './user-api/model-template/validator'
 import { EVOLINK_MODEL_PRESETS } from './providers/evolink/presets'
+import { listBuiltinCapabilityCatalog } from '@/lib/model-capabilities/catalog'
 
 export interface CustomModel {
   modelId: string
@@ -289,6 +290,47 @@ function pickProviderStrict(
   throw new Error(`PROVIDER_NOT_FOUND: ${providerId} is not configured`)
 }
 
+function getGlobalProviders(): CustomProvider[] {
+  const providers: CustomProvider[] = []
+  if (process.env.GLOBAL_OPENAI_API_KEY) {
+    providers.push({
+      id: 'openai-official',
+      name: 'Global OpenAI',
+      apiKey: process.env.GLOBAL_OPENAI_API_KEY,
+      baseUrl: process.env.GLOBAL_OPENAI_BASE_URL,
+    })
+  }
+  if (process.env.GLOBAL_BAILIAN_API_KEY) {
+    providers.push({
+      id: 'bailian',
+      name: 'Global Bailian',
+      apiKey: process.env.GLOBAL_BAILIAN_API_KEY,
+    })
+  }
+  if (process.env.GLOBAL_FAL_API_KEY) {
+    providers.push({
+      id: 'fal',
+      name: 'Global FAL',
+      apiKey: process.env.GLOBAL_FAL_API_KEY,
+    })
+  }
+  if (process.env.GLOBAL_SILICONFLOW_API_KEY) {
+    providers.push({
+      id: 'siliconflow',
+      name: 'Global SiliconFlow',
+      apiKey: process.env.GLOBAL_SILICONFLOW_API_KEY,
+    })
+  }
+  if (process.env.GLOBAL_MINIMAX_API_KEY) {
+    providers.push({
+      id: 'minimax',
+      name: 'Global MiniMax',
+      apiKey: process.env.GLOBAL_MINIMAX_API_KEY,
+    })
+  }
+  return providers
+}
+
 async function readUserConfig(userId: string): Promise<{ models: CustomModel[]; providers: CustomProvider[] }> {
   const pref = await prisma.userPreference.findUnique({
     where: { userId },
@@ -298,9 +340,19 @@ async function readUserConfig(userId: string): Promise<{ models: CustomModel[]; 
     },
   })
 
+  const userProviders = parseCustomProviders(pref?.customProviders)
+  const globalProviders = getGlobalProviders()
+  
+  const mergedProviders = [...userProviders]
+  for (const gp of globalProviders) {
+    if (!mergedProviders.some(p => p.id === gp.id)) {
+      mergedProviders.push(gp)
+    }
+  }
+
   return {
     models: parseCustomModels(pref?.customModels),
-    providers: parseCustomProviders(pref?.customProviders),
+    providers: mergedProviders,
   }
 }
 
@@ -436,13 +488,15 @@ export async function getProviderConfig(userId: string, providerId: string): Pro
 
 
 /**
- * 获取用户自定义模型列表（含 EvoLink 预设自动注入）
+ * 获取用户自定义模型列表（含 EvoLink 预设自动注入及全局系统模型自动注入）
  */
 export async function getUserModels(userId: string): Promise<CustomModel[]> {
   const { models, providers } = await readUserConfig(userId)
 
-  // Inject EvoLink presets for evolink providers with API keys
+  const activeProviderIds = new Set(providers.filter(p => !!p.apiKey).map(p => p.id))
   const seenKeys = new Set(models.map((m) => `${m.provider}::${m.modelId}`))
+
+  // 1. Inject EvoLink presets for evolink providers with API keys
   for (const p of providers) {
     if (getProviderKey(p.id).toLowerCase() !== 'evolink') continue
     if (!p.apiKey) continue
@@ -459,6 +513,25 @@ export async function getUserModels(userId: string): Promise<CustomModel[]> {
         price: 0,
       })
     }
+  }
+
+  // 2. Inject Builtin models for all active providers
+  const builtin = listBuiltinCapabilityCatalog()
+  for (const entry of builtin) {
+    if (!activeProviderIds.has(entry.provider)) continue
+    
+    const key = `${entry.provider}::${entry.modelId}`
+    if (seenKeys.has(key)) continue
+    seenKeys.add(key)
+    
+    models.push({
+      modelId: entry.modelId,
+      modelKey: composeModelKey(entry.provider, entry.modelId),
+      name: entry.modelId,
+      type: entry.modelType,
+      provider: entry.provider,
+      price: 0,
+    })
   }
 
   return models

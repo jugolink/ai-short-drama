@@ -779,6 +779,7 @@ async function copyCharacterFromGlobal(input: AssetCopyInput) {
     include: { appearances: true },
   })
   if (!projectCharacter) throw new ApiError('NOT_FOUND')
+  if (projectCharacter.studioProjectId !== input.access.projectId) throw new ApiError('FORBIDDEN')
   if (projectCharacter.appearances.length > 0) {
     await prisma.characterAppearance.deleteMany({ where: { characterId: input.targetId } })
   }
@@ -833,6 +834,7 @@ async function copyLocationFromGlobal(input: AssetCopyInput) {
     include: { images: true },
   })
   if (!projectLocation) throw new ApiError('NOT_FOUND')
+  if (projectLocation.studioProjectId !== input.access.projectId) throw new ApiError('FORBIDDEN')
   if (projectLocation.images.length > 0) {
     await prisma.locationImage.deleteMany({ where: { locationId: input.targetId } })
   }
@@ -876,6 +878,12 @@ async function copyVoiceFromGlobal(input: AssetCopyInput) {
     where: { id: input.globalAssetId, userId: input.access.userId },
   })
   if (!globalVoice) throw new ApiError('NOT_FOUND')
+  const targetCharacter = await prisma.studioCharacter.findUnique({
+    where: { id: input.targetId },
+  })
+  if (!targetCharacter) throw new ApiError('NOT_FOUND')
+  if (targetCharacter.studioProjectId !== input.access.projectId) throw new ApiError('FORBIDDEN')
+
   const character = await prisma.studioCharacter.update({
     where: { id: input.targetId },
     data: {
@@ -953,6 +961,10 @@ async function updateGlobalAsset(input: AssetUpdateInput) {
 
 async function updateProjectAsset(input: AssetUpdateInput) {
   if (input.kind === 'character') {
+    const target = await prisma.studioCharacter.findUnique({ where: { id: input.assetId } })
+    if (!target) throw new ApiError('NOT_FOUND')
+    if (target.studioProjectId !== input.access.projectId) throw new ApiError('FORBIDDEN')
+    
     const updateData: Record<string, unknown> = {}
     if (input.body.name !== undefined) updateData.name = normalizeString(input.body.name)
     if (input.body.introduction !== undefined) updateData.introduction = normalizeString(input.body.introduction)
@@ -967,6 +979,10 @@ async function updateProjectAsset(input: AssetUpdateInput) {
     return { success: true, character }
   }
   if (input.kind === 'location') {
+    const target = await prisma.studioLocation.findUnique({ where: { id: input.assetId } })
+    if (!target) throw new ApiError('NOT_FOUND')
+    if (target.studioProjectId !== input.access.projectId) throw new ApiError('FORBIDDEN')
+
     const updateData: Record<string, unknown> = {}
     if (input.body.name !== undefined) updateData.name = normalizeString(input.body.name)
     if (input.body.summary !== undefined) updateData.summary = normalizeString(input.body.summary) || null
@@ -977,6 +993,10 @@ async function updateProjectAsset(input: AssetUpdateInput) {
     return { success: true, location }
   }
   if (input.kind === 'prop') {
+    const target = await prisma.studioLocation.findUnique({ where: { id: input.assetId } })
+    if (!target) throw new ApiError('NOT_FOUND')
+    if (target.studioProjectId !== input.access.projectId) throw new ApiError('FORBIDDEN')
+
     const updateData: Record<string, unknown> = {}
     if (input.body.name !== undefined) updateData.name = normalizeString(input.body.name)
     if (input.body.summary !== undefined) updateData.summary = normalizeString(input.body.summary) || null
@@ -1047,8 +1067,10 @@ async function updateProjectAssetVariant(input: AssetVariantUpdateInput) {
   if (input.kind === 'character') {
     const appearance = await prisma.characterAppearance.findUnique({
       where: { id: input.variantId },
+      include: { character: true },
     })
     if (!appearance) throw new ApiError('NOT_FOUND')
+    if (appearance.character.studioProjectId !== input.access.projectId) throw new ApiError('FORBIDDEN')
     const trimmedDescription = normalizeString(input.body.description)
     if (!trimmedDescription) throw new ApiError('INVALID_PARAMS')
     let descriptions: string[] = []
@@ -1069,6 +1091,14 @@ async function updateProjectAssetVariant(input: AssetVariantUpdateInput) {
     })
     return { success: true }
   }
+
+  const targetImage = await prisma.locationImage.findUnique({
+    where: { id: input.variantId },
+    include: { location: true },
+  })
+  if (!targetImage) throw new ApiError('NOT_FOUND')
+  if (targetImage.location.studioProjectId !== input.access.projectId) throw new ApiError('FORBIDDEN')
+
   const trimmedDescription = normalizeString(input.body.description)
   if (!trimmedDescription) throw new ApiError('INVALID_PARAMS')
   const cleanDescription = removeLocationPromptSuffix(trimmedDescription)
@@ -1118,10 +1148,15 @@ export async function createAsset(input: AssetCreateInput) {
 export async function removeAsset(input: AssetRemoveInput) {
   requireLocationBackedKind(input.kind)
   if (input.access.scope === 'global') {
+    const globalAsset = await prisma.globalLocation.findUnique({ where: { id: input.assetId } })
+    if (!globalAsset || globalAsset.userId !== input.access.userId) throw new ApiError('NOT_FOUND')
     await deleteGlobalLocationBackedAsset(input.assetId)
     return { success: true }
   }
-  requireProjectId(input.access)
+  const projectId = requireProjectId(input.access)
+  const projectAsset = await prisma.studioLocation.findUnique({ where: { id: input.assetId } })
+  if (!projectAsset) throw new ApiError('NOT_FOUND')
+  if (projectAsset.studioProjectId !== projectId) throw new ApiError('FORBIDDEN')
   await deleteProjectLocationBackedAsset(input.assetId)
   return { success: true }
 }
